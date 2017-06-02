@@ -3,167 +3,95 @@
 #include <string>
 #include <sstream>
 #include "LinkedList.h"
+#define DEFAULT_TABLE_SIZE 8
 using namespace std;
-
-/* block size = 4k bytes(4096 bytes), record size = 32 bytes */
 
 struct Student {
 	char name[20];
-	unsigned studentID;	//key
-	float score;	//for indexing
+	unsigned studentID;	//key for hashing
+	float score;	//index for indexing
 	unsigned advisorID;
 };
 
-class HashTable {
-private:
-	int key;	//studentID
-	LinkedList **table;	//LinkedList¸¦ ¹è¿­ÀÇ ¿ø¼Ò·Î ¼³Á¤
-	int numItem;
-	int lengthArray;
+class DHash {
+	LinkedList **table;	//block number and Nodes
+	int tableSize;	//size of table
 public:
-	HashTable();
-	~HashTable();
-	void makeDBfile(ifstream& inp);
-	void setHashTable();
-	void insertItemHash(Item *p, int b);
-	Item* getItem_Key(unsigned k);
+	DHash();
+	~DHash();
+	void insertItem(Node *t);
+	void setHashTable(ifstream &fp);
+	int hashFunc(unsigned k);	//compute block number
+	void doubleTable();	//extend hash table about double
 	void printTable();
-	int hashFunc(unsigned k);
-	int getNumItem();
+	int countNum(int blockNum);	//count total item matched to blockNum in table
+	int findBlockNum(unsigned k);	//find block number of key in hash table
 };
 
-HashTable::HashTable() {
-	key = -1;
-	table = NULL;
-	numItem = 0;
-	lengthArray = 0;
+DHash::DHash() {
+	tableSize = DEFAULT_TABLE_SIZE;	//default table size : 16
+	table = new LinkedList*[tableSize];
+	for (int i = 0; i < tableSize; i++) {
+		table[i] = NULL;
+	}
 }
 
-HashTable::~HashTable() {
-	delete[] table;
+DHash::~DHash() {
+	delete table;
 }
 
-void HashTable::insertItemHash(Item *p, int b) {
-	table[b]->insertItemList(p);
-}
-
-int HashTable::hashFunc(unsigned k) {
-	int result;
-
-	result = k % 32;
-
-	return result;
-}
-
-Item* HashTable::getItem_Key(unsigned k) {	//ÇÏ³ª¸¸ ³ª¿È..?
-	int t = hashFunc(k);	//¸®½ºÆ® ¹è¿­ ÀÎµ¦½º
-	int n = table[t]->getNum();
-	Item *tmp = table[t]->getItem(k);	//LinkedListÀÇ first Item
-
-	for (int i = 0; i < n; i++) {
-		if (tmp->getKey() == k) {
-			return tmp;
+void DHash::insertItem(Node *t) {
+	int hash;
+	hash = hashFunc(t->getKey());
+	if (table[hash] == NULL) {
+		table[hash] = new LinkedList();
+		table[hash]->setBlockNum(hash);
+		table[hash]->insertItem(t);
+		//cout << "insert item block "<<table[hash]->getBlockNum()<<" in table[" << hash << "]\n";
+	}
+	else {
+		if (table[hash]->IsFull()) {
+			cout << "overflow, double table size\n";
+			doubleTable();
+			insertItem(t);
+			//printTable();
+			cout << endl;
 		}
 		else {
-			while (tmp->getNext() != NULL) {
-				if (tmp->getKey() == k) {
-					return tmp;
-				}
-				tmp = tmp->getNext();
-			}
+			table[hash]->insertItem(t);
+			//cout << "insert item in table[" << hash << "]\n";
 		}
 	}
-	cout << "no matched item\n";
-	return NULL;
 }
 
-void HashTable::printTable() {
-	for (int i = 0; i < lengthArray; i++) {
-		cout << "[" << i << "¹øÂ° Hash List]\n";
-		table[i]->printList();
-	}
-}
-
-int HashTable::getNumItem() {
-	int result = 0;
-	for (int i = 0; i < lengthArray; i++) {
-		result = result + table[i]->getTotNum();
-	}
-
-	return result;
-}
-
-void HashTable::setHashTable() {
-	ifstream fp;
-	fp.open("Students.DB", ios::binary);
-
-	ofstream fp2;
-	fp2.open("Students.hash", ios::binary);
-
-	if (fp.is_open() != true || fp2.is_open() != true) {
+void DHash::setHashTable(ifstream &fp) {
+	if (fp.is_open() != true) {
 		cout << "error\n";
 		return;
 	}
 
-	if (numItem <= sizeof(Student)) {
-		lengthArray = numItem;
-	}
-	else {
-		lengthArray = sizeof(Student);
-	}
-	//cout << "lengthArray : " << lengthArray << endl;
-	table = new LinkedList*[lengthArray];
+	ofstream fp2;
+	fp2.open("Students.hash", ios::binary);	//hash íŒŒì¼
 
-	for (int i = 0; i < lengthArray; i++) {
-		table[i] = new LinkedList();
-	}
+	ofstream fp3;
+	fp3.open("Students.DB", ios::binary | ios::app);	//DB íŒŒì¼ : ë®ì–´ì“°ê¸° ê°€ëŠ¥
 
-	for (int i = 0; i < numItem; i++) {
-		Student std;
-		fp.read((char*)&std, sizeof(std));
-		//cout << std.name << " " << std.studentID << " " << std.score << " " << std.advisorID << endl;
-
-		int b = hashFunc(std.studentID);
-
-		Item *it = new Item(std.studentID, b);
-		//cout << it->getKey() << endl;
-		insertItemHash(it, b);
-		//cout << "num of table" << b << ":" << table[b]->getNum() << endl;
-	}
-
-	printTable();
-
-	for (int i = 0; i < numItem; i++) {
-		fp2.write((char*)&table[i], sizeof(table[i]));
-	}
-
-	fp.close();
-	fp2.close();
-}
-
-void HashTable::makeDBfile(ifstream& fp) {
-	if (fp.is_open() != true) {
-		cout << "error!!\n";
+	if (fp2.is_open() != true || fp3.is_open() != true) {
+		cout << "error2\n";
 		return;
 	}
 
-	ofstream fp2;
-	fp2.open("Students.DB", ios::binary);
-	int num;
+	int num;	//number of student records
 	string buffer;
 	getline(fp, buffer);
 	stringstream str(buffer);
-	//str.str(buffer);
 	str >> num;
-	//cout << "num of datum : " << num<<endl;
-	
-	numItem = num;
+	cout << "number of data : " << num << endl;
 
 	Student std;
 
-	/* DB ¸¸µé±â */
 	for (int i = 0; i < num; i++) {
-		/* 1. Student µ¥ÀÌÅÍ¸¦ input file¿¡¼­ ÀĞ¾î¿Í Å¸ÀÔ º¯È¯ */
+		/* 1. Student ë°ì´í„°ë¥¼ input fileì—ì„œ ì½ì–´ì™€ íƒ€ì… ë³€í™˜ */
 		string buffer2;
 		getline(fp, buffer2);
 		//cout << buffer2 << endl;
@@ -189,44 +117,130 @@ void HashTable::makeDBfile(ifstream& fp) {
 
 		int j = 0;
 		while (ptr[j] != NULL) {
-			//printf("%s\n", ptr[j]);
+			//cout<<ptr[j]<<endl;
 			j++;
 			ptr[j] = strtok(NULL, ",");
 		}
 
 		stdID = atoi(ptr[1]);
-		//cout << stdID << endl;
+		//cout << "studentID : " << stdID << endl;
 		sc = atof(ptr[2]);
-		//cout << sc << endl;
+		//cout << "score : " << sc << endl;
 		admID = atoi(ptr[3]);
-		//cout << admID << endl;
+		//cout << "adminID : " << admID << endl;
 
-		/* 2. Å¸ÀÔ º¯È¯µÈ µ¥ÀÌÅÍ¸¦ Student struct ¹è¿­¿¡ ÀúÀå */
+		/* 2. íƒ€ì… ë³€í™˜ëœ ë°ì´í„°ë¥¼ Student structì— ì €ì¥ */
 		strcpy(std.name, wholename.c_str());
 		std.studentID = stdID;
 		std.score = sc;
 		std.advisorID = admID;
 
-		/* 3. ÀúÀåµÈ struct¸¦ binary output file¿¡ ÀúÀå */
-		/* ºí·°¿¡ ´ëÇÑ ¼öÁ¤ ÇÊ¿ä...
-		ºí·° Ã³¸® ¾î¶»°Ô ÇÏÁö...ÇÏ...
-		ºí·°À» ¹è¿­·Î ¸¸µé¤©..?
-		Student Å¸ÀÔ ¹è¿­·Î..? ¾î¶»°Ô..? 4000 / 32 ·Î ºí·°»çÀÌÁî ¸¸µé¾î¾ß µÊ? ¾îÄÉ¾ßµÊ? ¤µ¤²?
+		/* 3. hash functionìœ¼ë¡œ ì €ì¥í•  ë¸”ëŸ­ ê³„ì‚° ë° í•´ì‰¬í…Œì´ë¸”ì— insert */
+		Node *t = new Node(std.studentID);
+		insertItem(t);
+
+		/* 4. hash functionìœ¼ë¡œ ì •í•´ì§„ DB ë¸”ëŸ­ì— ë°ì´í„° ì €ì¥
+		* ìœ„ì¹˜ ì˜®ê¸°ê¸° : seekp
+		* 4096*blockNum + itemìˆ˜*sizeof(std)
 		*/
-		fp2.write((char*)&std, sizeof(std));
+		//hash tableì—ì„œ keyë¥¼ ì´ìš©í•´ ë¸”ëŸ­ë„˜ë²„ ì°¾ì•„ì˜¤ê¸°
+		int blockNum = findBlockNum(t->getKey());
+		fp3.seekp(MAX_BLOCK_SIZE*blockNum + sizeof(Student)*countNum(blockNum), ios::beg);	//ì‹œì‘(ios::beg)ë¶€í„° 4096*blockNum + itemìˆ˜*sizeof(std)
+		fp3.write((char*)&std, sizeof(std));	//ë®ì–´ì“°ê¸°ë¡œ DB íŒŒì¼ ìˆ˜ì • ê°€ëŠ¥
+	}
+
+	/* Students.hash íŒŒì¼ì— hash table ì“°ê¸° */
+	for (int i = 0; i < tableSize; i++) {
+		fp2.write((char*)&table[i], sizeof(table[i]));
 	}
 
 	fp2.close();
+	fp3.close();
+}
+
+int DHash::findBlockNum(unsigned k) {
+	int bn = hashFunc(k);
+	int result = -1;
+
+	for (int i = 0; i < tableSize; i++) {
+		if (table[i] != NULL) {
+			if (table[i]->getBlockNum() == bn) {
+				result = bn;
+			}
+		}
+	}
+
+	return result;
+}
+
+int DHash::countNum(int blockNum) {
+	int result = 0;
+
+	for (int i = 0; i < tableSize; i++) {
+		if (table[i] != NULL) {
+			if (table[i]->getBlockNum() == blockNum) {
+				result = result + table[i]->getNumItem();
+			}
+		}
+	}
+	return result;
+}
+
+int DHash::hashFunc(unsigned k) {
+	int result;
+
+	result = k % tableSize;
+
+	return result;
+}
+
+void DHash::doubleTable() {
+	/* table í¬ê¸°ë¥¼ 2ë°°ë¡œ í™•ì¥ */
+	int sizeOld = tableSize;	//ê¸°ì¡´ table size
+	tableSize = tableSize * 2;
+	//cout << "table size up " << sizeOld << " to " << tableSize << endl;
+	LinkedList **tableOld;	//ê¸°ì¡´ tableì„ ë°±ì—…í•˜ê¸° ìœ„í•¨
+	tableOld = table;	//ê¸°ì¡´ tableì„ ë°±ì—…
+
+	table = new LinkedList*[tableSize];	//ê¸°ì¡´ tableì˜ í¬ê¸°ë¥¼ 2ë°°ë¡œ í™•ì¥
+	for (int i = 0; i < tableSize; i++) {
+		table[i] = NULL;
+	}
+	//	cout << "complete table size double\n";
+
+	/* ê¸°ì¡´ table(tableOld)ì˜ ë¦¬ìŠ¤íŠ¸ì™€ ë¦¬ìŠ¤íŠ¸ ë‚´ë¶€ ë…¸ë“œë¥¼ í™•ì¥ëœ tableì— insert */
+	for (int i = 0; i < sizeOld; i++) {
+		if (tableOld[i] != NULL) {
+			LinkedList *list = tableOld[i];	//ê¸°ì¡´ tableì˜ ië²ˆì§¸ LinkedList
+			int b = list->getBlockNum();	//ê¸°ì¡´ LinkedListì˜ ë¸”ëŸ­ë„˜ë²„
+			Node *t = list->getFirst();
+			while (t != NULL) {
+				insertItem(t);	//ë…¸ë“œ të¥¼ ë‹¤ì‹œ tableì— insert
+				t = t->getNext();
+			}
+		}
+	}
+	delete[] tableOld;	//ê¸°ì¡´ table ì œê±°
+}
+
+void DHash::printTable() {
+	for (int i = 0; i < tableSize; i++) {
+		if (table[i] != NULL) {
+			cout << "table[" << i << "] block number : ";
+			cout << table[i]->getBlockNum() << endl;
+			//table[i]->printList();
+		}
+	}
 }
 
 int main() {
 	ifstream fp;
 	fp.open("sampleData.csv");
 
-	HashTable hash;
+	DHash hash;
+	hash.setHashTable(fp);
+	hash.printTable();
 
-	hash.makeDBfile(fp);
-	hash.setHashTable();
 	fp.close();
 
 	return 0;
