@@ -1,62 +1,58 @@
 #include <iostream>
+#define MAX_BLOCK_SIZE 4096
 using namespace std;
 
-class Item {
+class Node {	//for hash
 private:
-	Item *next;
-	unsigned key;
-	int bucketNum;
+	Node *next;	//ë‹¤ìŒ ë…¸ë“œ(ì•„ì´í…œ)
+	unsigned key;	//studentID
 public:
-	Item() {
+	Node() {
 		next = NULL;
-		key = 0;
-		bucketNum = -1;
+		key = -1;
 	}
-	Item(unsigned k, int bN) {
+	Node(unsigned k) {
 		next = NULL;
 		key = k;
-		bucketNum = bN;
 	}
-	Item *getNext() {
+	Node *getNext() {
 		return next;
-	}
-	void setNext(Item *p) {
-		next = p;
-	}
-	void setKey(unsigned k) {
-		key = k;
 	}
 	unsigned getKey() {
 		return key;
 	}
-	void setBucketNum(int bN) {
-		bucketNum = bN;
+	void setNext(Node *n) {
+		next = n;
 	}
-	int getBucketNum() {
-		return bucketNum;
+	void setKey(unsigned k) {
+		key = k;
 	}
 };
 
-class LinkedList {	//ÃÑ Å©±â = 4k ¹ÙÀÌÆ® (4096)
+class LinkedList {
 private:
-	Item *first;	//Item Å©±â = 12 ¹ÙÀÌÆ® (12)
-	int numItem;
-	LinkedList *next;	//overflow°¡ µÉ °æ¿ì¸¦ ´ëºñÇÑ next ¹öÅ¶ Æ÷ÀÎÅÍ
+	int blockNum;	//í•´ë‹¹ ë¦¬ìŠ¤íŠ¸ê°€ ì†í•œ ë¸”ëŸ­ë„˜ë²„
+	int numItem;	//í•´ë‹¹ ë¦¬ìŠ¤íŠ¸ì— ë“¤ì–´ìžˆëŠ” ì•„ì´í…œ(ë…¸ë“œ) ìˆ˜
+	int size;	//í•´ë‹¹ ë¦¬ìŠ¤íŠ¸ì˜ í¬ê¸° : 4kë¥¼ ë„˜ìœ¼ë©´ overflow ë°œìƒ
+	Node *first;
 public:
-	LinkedList() {	//ÄÁ½ºÆ®·°ÅÍ
-		first = NULL;
+	LinkedList() {
+		blockNum = -1;
 		numItem = 0;
-		next = NULL;
+		size = 0;
+		first = NULL;
 	}
-	~LinkedList() {	 //µð½ºÆ®·°ÅÍ
+	LinkedList(int b) {
+		blockNum = b;
+		numItem = 0;
+		size = 0;
+		first = NULL;
+	}
+	~LinkedList() {
 		deleteList(first);
-		if (next != NULL) {
-			delete[] next;
-		}
 	}
-	void insertItemList(Item *p);	//p ³Ö±â
-	void deleteList(Item *t) {	//µð½ºÆ®·°ÅÍ ÇÔ¼ö
-		if (t == NULL) {
+	void deleteList(Node *t) {
+		if (t->getNext() == NULL) {
 			delete t;
 		}
 		else {
@@ -64,57 +60,60 @@ public:
 			delete t;
 		}
 	}
-	Item* getItem(unsigned k);
-	LinkedList* getNextList() {
-		return next;
+	void insertItem(Node *t);
+	Node *getFirst() {
+		return first;
 	}
-	void printList();
-	int getNum() {
+	Node *getItem(unsigned k);
+	int getBlockNum() {
+		return blockNum;
+	}
+	void setBlockNum(int b) {
+		blockNum = b;
+	}
+	int getNumItem() {
 		return numItem;
 	}
-	int getTotNum();
-	bool IsFullList();
+	int getSize() {
+		return size;
+	}
+	void printList();
+	bool IsFull();
 };
 
-void LinkedList::insertItemList(Item *p) {	//q µÚ¿¡ p ³Ö±â -> ¹«ÇÑ·çÇÁ
+void LinkedList::insertItem(Node *t) {
 	if (first == NULL) {
-		first = p;
-		p->setNext(NULL);
+		first = t;
+		t->setNext(NULL);
 		numItem = numItem + 1;
+		size = size + 32;
 	}
 	else {
-		Item *q = first;
-		//q = first->getNext();
-		if (!this->IsFullList()) {
-			while (q->getNext() != NULL) {
-				q = q->getNext();
-			}
-			q->setNext(p);
-			numItem = numItem + 1;
+		Node *p = first;
+		if (IsFull()) {
+			cout << "overflow!\n";
 		}
 		else {
-			cout << "overflow list in LinkedList.h\n";
-			cout << "num of item in list : " << numItem << endl;
-			if (next == NULL) {
-				next = new LinkedList();
+			while (p->getNext() != NULL) {
+				p = p->getNext();
 			}
-			next->insertItemList(p);
+			p->setNext(t);
+			t->setNext(NULL);
+			numItem = numItem + 1;
+			size = size + 32;
 		}
 	}
 }
 
-Item* LinkedList::getItem(unsigned k) {
-	Item *tmp = first;
-	if (tmp->getNext() == NULL && tmp->getKey() == k) {	//first : ºí·°(¹öÅ¶) Æ÷ÀÎÅÍ, k¿Í °°Àº °ªÀ» °¡Áö´Â À¯ÀÏÇÑ ¾ÆÀÌÅÛ
-		return tmp;
-	}
-	while (tmp->getNext() != NULL) {
-		if (tmp != first && tmp->getKey() == k) {	//first : ±×³É ºí·°(¹öÅ¶) Æ÷ÀÎÅÍ, first->next°¡ ¸®ÅÏµÇ¸é Á¦´ë·Î µÈ °Í
-			return tmp;
+Node* LinkedList::getItem(unsigned k) {
+	Node *t = first;
+	while (t->getNext() != NULL) {
+		if (t->getKey() == k) {
+			return t;
 		}
-		tmp = tmp->getNext();
+		t = t->getNext();
 	}
-	cout << "no item matched key\n";
+	cout << "no matched Item\n";
 	return NULL;
 }
 
@@ -124,25 +123,22 @@ void LinkedList::printList() {
 		return;
 	}
 
-	cout << "number of Items : " << numItem << endl;
-	if (getNextList() != NULL) {
-		cout << "overflowed list\n";
-		cout << "number of Items in next list : " << getNextList()->getNum() << endl;
+	cout << "[block number : " << blockNum << " ]" << endl;
+	Node *t = first;
+	while (t->getNext() != NULL) {
+		cout << t->getKey() << " ";
+		t = t->getNext();
 	}
+	cout << endl;
 }
 
-int LinkedList::getTotNum() {
-	int result = getNum();
-	LinkedList *t = next;
-	while (t != NULL) {
-		result = result + t->getNum();
+bool LinkedList::IsFull() {
+	bool result = false;
+
+	if (MAX_BLOCK_SIZE - size < 32) {
+		cout << "list is full, overflow\n";
+		result = true;
 	}
+
 	return result;
-}
-
-bool LinkedList::IsFullList() {
-	if (4096 - (sizeof(Item)*getNum()) < sizeof(Item)) {
-		return true;
-	}
-	return false;
 }
