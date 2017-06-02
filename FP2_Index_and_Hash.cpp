@@ -16,6 +16,7 @@ struct Student {
 class DHash {
 	LinkedList **table;	//block number and Nodes
 	int tableSize;	//size of table
+	int *blockTable;	//hash table with block number
 public:
 	DHash();
 	~DHash();
@@ -26,6 +27,10 @@ public:
 	void printTable();
 	int countNum(int blockNum);	//count total item matched to blockNum in table
 	int findBlockNum(unsigned k);	//find block number of key in hash table
+	int getBlockNum(int i) {
+		int result = blockTable[i];
+		return result;
+	}
 };
 
 DHash::DHash() {
@@ -34,10 +39,12 @@ DHash::DHash() {
 	for (int i = 0; i < tableSize; i++) {
 		table[i] = NULL;
 	}
+	blockTable = new int[tableSize];
 }
 
 DHash::~DHash() {
 	delete table;
+	delete blockTable;
 }
 
 void DHash::insertItem(Node *t) {
@@ -47,6 +54,7 @@ void DHash::insertItem(Node *t) {
 		table[hash] = new LinkedList();
 		table[hash]->setBlockNum(hash);
 		table[hash]->insertItem(t);
+		blockTable[hash] = hash;
 		//cout << "insert item block "<<table[hash]->getBlockNum()<<" in table[" << hash << "]\n";
 	}
 	else {
@@ -151,7 +159,7 @@ void DHash::setHashTable(ifstream &fp) {
 
 	/* Students.hash 파일에 hash table 쓰기 */
 	for (int i = 0; i < tableSize; i++) {
-		fp2.write((char*)&table[i], sizeof(table[i]));
+		fp2.write((char*)&blockTable[i], sizeof(blockTable[i]));
 	}
 
 	fp2.close();
@@ -200,17 +208,21 @@ void DHash::doubleTable() {
 	tableSize = tableSize * 2;
 	//cout << "table size up " << sizeOld << " to " << tableSize << endl;
 	LinkedList **tableOld;	//기존 table을 백업하기 위함
+	int *blockTableOld;
 	tableOld = table;	//기존 table을 백업
+	blockTableOld = blockTable;
 
 	table = new LinkedList*[tableSize];	//기존 table의 크기를 2배로 확장
+	blockTable = new int[tableSize];
 	for (int i = 0; i < tableSize; i++) {
 		table[i] = NULL;
+		blockTable[i] = NULL;
 	}
 	//	cout << "complete table size double\n";
 
 	/* 기존 table(tableOld)의 리스트와 리스트 내부 노드를 확장된 table에 insert */
 	for (int i = 0; i < sizeOld; i++) {
-		if (tableOld[i] != NULL) {
+		if (tableOld[i] != NULL && blockTableOld[i] != NULL) {
 			LinkedList *list = tableOld[i];	//기존 table의 i번째 LinkedList
 			int b = list->getBlockNum();	//기존 LinkedList의 블럭넘버
 			Node *t = list->getFirst();
@@ -221,13 +233,14 @@ void DHash::doubleTable() {
 		}
 	}
 	delete[] tableOld;	//기존 table 제거
+	delete[] blockTableOld;
 }
 
 void DHash::printTable() {
 	for (int i = 0; i < tableSize; i++) {
 		if (table[i] != NULL) {
 			cout << "table[" << i << "] block number : ";
-			cout << table[i]->getBlockNum() << endl;
+			cout << getBlockNum(i) << endl;
 			//table[i]->printList();
 		}
 	}
